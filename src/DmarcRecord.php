@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CbowOfRivia\DmarcRecordBuilder;
 
 use Illuminate\Support\Collection;
@@ -33,6 +35,12 @@ class DmarcRecord
 
     public ?int $interval = null;
 
+    public ?string $np = null;
+
+    public ?string $psd = null;
+
+    public ?string $t = null;
+
     public function __construct(
         string $version = 'DMARC1',
         ?string $policy = 'none',
@@ -43,7 +51,10 @@ class DmarcRecord
         ?string $adkim = null,
         ?string $aspf = null,
         ?string $reporting = null,
-        ?string $interval = null
+        ?int $interval = null,
+        ?string $np = null,
+        ?string $psd = null,
+        ?string $t = null
     ) {
         $this->version($version);
         $this->policy($policy);
@@ -55,6 +66,9 @@ class DmarcRecord
         $this->aspf($aspf);
         $this->reporting($reporting);
         $this->interval($interval);
+        $this->nonExistentSubdomainPolicy($np);
+        $this->publicSuffixDomainPolicy($psd);
+        $this->testingMode($t);
     }
 
     /**
@@ -89,6 +103,39 @@ class DmarcRecord
         return $this;
     }
 
+    public function nonExistentSubdomainPolicy(?string $policy): static
+    {
+        Assert::inArray($policy, [
+            'none', 'quarantine', 'reject', null,
+        ]);
+
+        $this->np = $policy;
+
+        return $this;
+    }
+
+    public function publicSuffixDomainPolicy(?string $policy): static
+    {
+        Assert::inArray($policy, [
+            'y', 'n', 'u', null,
+        ]);
+
+        $this->psd = $policy;
+
+        return $this;
+    }
+
+    public function testingMode(?string $testingMode): static
+    {
+        Assert::inArray($testingMode, [
+            'y', 'n', null,
+        ]);
+
+        $this->t = $testingMode;
+
+        return $this;
+    }
+
     public function pct(?int $percentage): static
     {
         $this->pct = $percentage;
@@ -118,7 +165,7 @@ class DmarcRecord
     public function ruf(?string $mailto): static
     {
         if (is_null($mailto)) {
-            $this->rua = $mailto;
+            $this->ruf = $mailto;
 
             return $this;
         }
@@ -137,7 +184,7 @@ class DmarcRecord
     public function adkim(?string $value): static
     {
         Assert::inArray($value, [
-            'relaxed', 'string', null,
+            'relaxed', 'strict', null,
         ]);
 
         $this->adkim = $value;
@@ -148,7 +195,7 @@ class DmarcRecord
     public function aspf(?string $value): static
     {
         Assert::inArray($value, [
-            'relaxed', 'string', null,
+            'relaxed', 'strict', null,
         ]);
 
         $this->aspf = $value;
@@ -184,7 +231,10 @@ class DmarcRecord
         ?string $adkim = null,
         ?string $aspf = null,
         ?string $reporting = null,
-        ?string $interval = null
+        ?int $interval = null,
+        ?string $np = null,
+        ?string $psd = null,
+        ?string $t = null
     ): static {
         return new static(
             version: $version,
@@ -196,13 +246,16 @@ class DmarcRecord
             adkim: $adkim,
             aspf: $aspf,
             reporting: $reporting,
-            interval: $interval
+            interval: $interval,
+            np: $np,
+            psd: $psd,
+            t: $t
         );
     }
 
     public static function parse(string $record): static
     {
-        $builder = new static();
+        $builder = new static;
 
         collect(explode(';', $record))
             ->mapWithKeys(function (string $part) {
@@ -222,6 +275,7 @@ class DmarcRecord
                 'v' => $builder->version($value),
                 'p' => $builder->policy($value),
                 'sp' => $builder->subdomainPolicy($value),
+                'np' => $builder->subdomainPolicy($value),
                 'pct' => $builder->pct((int) $value),
                 'rua' => $builder->rua($value),
                 'ruf' => $builder->ruf($value),
@@ -229,6 +283,9 @@ class DmarcRecord
                 'aspf' => $builder->aspf($builder->getHumanAspfValue($value)),
                 'ro' => $builder->reporting($builder->getHumanReportingOption($value)),
                 'ri' => $builder->interval((int) $value),
+                'np' => $builder->nonExistentSubdomainPolicy($value),
+                'psd' => $builder->publicSuffixDomainPolicy($value),
+                't' => $builder->testingMode($value),
             });
 
         return $builder;
@@ -272,6 +329,9 @@ class DmarcRecord
         $record .= $this->aspf ? "aspf={$this->getRealAspfValue($this->aspf)}; " : '';
         $record .= $this->reporting ? "ro={$this->getRealReportingOption($this->reporting)}; " : '';
         $record .= $this->interval ? "ri=$this->interval; " : '';
+        $record .= $this->np ? "sp=$this->np; " : '';
+        $record .= $this->psd ? "psd=$this->psd; " : '';
+        $record .= $this->t ? "t=$this->t; " : '';
 
         return trim($record);
     }
